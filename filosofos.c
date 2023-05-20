@@ -1,117 +1,236 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <signal.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <semaphore.h>
 
-#define N 5 // Número de filósofos/palitos
+// Definindo constantes
+#define NUM_FILOSOFOS 5
+#define CICLOS_STARVATION 10
 
+// Enumeração para representar os estados dos filósofos
+typedef enum {
+    PENSANDO,
+    FAMINTO,
+    COMENDO
+} Estado;
+
+// Estrutura para representar o monitor
 typedef struct {
-    int estado[N]; // Estado do filósofo
-    sem_t sem[N];
-    int deadlockFlag;
-    int starvationFlag;
-} MonitorFilosofos;
+    pthread_mutex_t mutex;
+    pthread_cond_t condicao[NUM_FILOSOFOS];
+    Estado estados[NUM_FILOSOFOS];
+    int encerrar;
+} Monitor;
 
-void pensar(int id) {
-    printf("Filósofo %d está pensando.\n", id);
-    sleep(rand() % 5); // Simula o tempo de pensamento
+// Variáveis globais para controle de deadlock e starvation
+int deadlock_flag;
+int starvation_flag;
+Monitor global_monitor;
+
+// Funções para manipular as flags de deadlock e starvation
+void set_deadlock_flag() {
+    deadlock_flag = 1;
 }
 
-void comer(int id) {
-    printf("Filósofo %d está comendo.\n", id);
-    sleep(rand() % 5); // Simula o tempo de alimentação
+void set_starvation_flag() {
+    starvation_flag = 1;
 }
 
-void pegarPalitos(MonitorFilosofos* monitor, int id) {
-    monitor->estado[id] = 1; // Filósofo está com fome
+int is_deadlock_detected() {
+    return deadlock_flag;
+}
 
-    while (monitor->estado[(id + 1) % N] == 2 || monitor->estado[(id + N - 1) % N] == 2) {
-        // Aguarda até que os filósofos adjacentes não estejam comendo
-        printf("Filósofo %d está esperando pelos palitos.\n", id);
-        sem_wait(&monitor->sem[id]);
+int is_starvation_detected() {
+    return starvation_flag;
+}
+
+// Protótipo da função testar
+void testar(Monitor *monitor, int filosofo);
+
+// Função que simula o filósofo pensando
+void pensar(int filosofo) {
+    printf("Filósofo %d está pensando.\n", filosofo);
+    sleep(rand() % 3);
+}
+
+// Função que simula o filósofo comendo
+void comer(int filosofo) {
+    printf("Filósofo %d está comendo.\n", filosofo);
+    sleep(rand() % 3);
+}
+
+// Função que representa o filósofo tentando pegar os palitos
+void pegar_palitos(Monitor *monitor, int filosofo) {
+    pthread_mutex_lock(&monitor->mutex);
+    monitor->estados[filosofo] = FAMINTO;
+    testar(monitor, filosofo);
+    while (monitor->estados[filosofo] != COMENDO)
+        pthread_cond_wait(&monitor->condicao[filosofo], &monitor->mutex);
+    pthread_mutex_unlock(&monitor->mutex);
+}
+
+// Função que libera os palitos após o filósofo terminar de comer
+void liberar_palitos(Monitor *monitor, int filosofo) {
+    pthread_mutex_lock(&monitor->mutex);
+    monitor->estados[filosofo] = PENSANDO;
+    testar(monitor, (filosofo + NUM_FILOSOFOS - 1) % NUM_FILOSOFOS);
+    testar(monitor, (filosofo + 1) % NUM_FILOSOFOS);
+    pthread_mutex_unlock(&monitor->mutex);
+}
+
+// Função que verifica se o filósofo pode comer e atualiza seu estado
+void testar(Monitor *monitor, int filosofo) {
+    int vizinho_esquerdo = (filosofo + NUM_FILOSOFOS - 1) % NUM_FILOSOFOS;
+    int vizinho_direito = (filosofo + 1) % NUM_FILOSOFOS;
+
+    if (monitor->estados[filosofo] == FAMINTO &&
+        monitor->estados[vizinho_esquerdo] != COMENDO &&
+        monitor->estados[vizinho_direito] != COMENDO) {
+        monitor->estados[filosofo] = COMENDO;
+        pthread_cond_signal(&monitor->condicao[filosofo]);
     }
-
-    monitor->estado[id] = 2; // Filósofo adquiriu os palitos
 }
 
-void liberarPalitos(MonitorFilosofos* monitor, int id) {
-    monitor->estado[id] = 0; // Filósofo está pensando
-
-    // Sinaliza os filósofos adjacentes se estiverem esperando
-    if (monitor->estado[(id + 1) % N] == 1 && monitor->estado[(id + N - 1) % N] != 2) {
-        // Sinaliza o semáforo para o filósofo à direita
-        sem_post(&monitor->sem[(id + 1) % N]);
-    }
-
-    if (monitor->estado[(id + 1) % N] != 2 && monitor->estado[(id + N - 1) % N] == 1) {
-        // Sinaliza o semáforo para o filósofo à esquerda
-        sem_post(&monitor->sem[(id + N - 1) % N]);
-    }
-
-    printf("Filósofo %d liberou os palitos.\n", id);
+// Função que encerra o programa quando o sinal SIGINT é recebido
+void encerrar_programa(int signal) {
+    printf("\nEncerrando o programa...\n");
+    exit(0);
 }
 
-void filosofo(MonitorFilosofos* monitor, int id) {
-    int count = 0;
+// Função que representa o comportamento de um filósofo
+void *filosofo(void *arg) {
+    // Obtém o ID do filósofo a partir do argumento
+    int filosofo = *(int *)arg;
+
+    // Obtém uma referência ao monitor global
+    Monitor *monitor = &global_monitor;
+
+    // Variável para controlar o tempo de fome do filósofo
+    time_t start_hungry_time;  
+
     while (1) {
-        pensar(id);
-        pegarPalitos(monitor, id);
-        comer(id);
-        liberarPalitos(monitor, id);
+        // O filósofo está pensando
+        pensar(filosofo);  
 
-        count++;
+        // O filósofo tenta pegar os palitos
+        pegar_palitos(monitor, filosofo);  
 
-        // Verifica por deadlock
-        if (count >= 2 * N && monitor->deadlockFlag == 0) {
-            monitor->deadlockFlag = 1;
-            printf("Possível deadlock detectado!\n");
+        // Bloqueia o mutex do monitor
+        pthread_mutex_lock(&monitor->mutex);  
+
+        // Verifica se o filósofo está faminto por muito tempo (starvation)
+        if (monitor->estados[filosofo] == FAMINTO) {
+            if (start_hungry_time == 0) {
+                // Inicia a contagem do tempo de fome
+                start_hungry_time = time(NULL);  
+            } else if (time(NULL) - start_hungry_time > CICLOS_STARVATION) {
+                // Se o tempo de fome exceder o limite, define a flag de starvation
+                set_starvation_flag();  
+            }
+        } else {
+            // Reseta a contagem do tempo de fome
+            start_hungry_time = 0;  
         }
 
-        // Verifica por starvation
-        if (count >= 10 * N && monitor->starvationFlag == 0) {
-            monitor->starvationFlag = 1;
-            printf("Possível situação de starvation detectada!\n");
+        int deadlock_detected = 1;
+        for (int i = 0; i < NUM_FILOSOFOS; i++) {
+            if (monitor->estados[i] != FAMINTO) {
+                // Verifica se há algum filósofo não faminto
+                deadlock_detected = 0;  
+                break;
+            }
         }
+        if (deadlock_detected) {
+            // Se todos os filósofos estiverem famintos, define a flag de deadlock
+            set_deadlock_flag();  
+        }
+
+        // Libera o mutex do monitor
+        pthread_mutex_unlock(&monitor->mutex);  
+
+        if (is_deadlock_detected()) {
+            printf("Deadlock detectado!\n");
+            break;
+        }
+
+        if (is_starvation_detected()) {
+            printf("Starvation detectada (%d ciclos)!\n", CICLOS_STARVATION);
+            break;
+        }
+
+        // O filósofo está comendo
+        comer(filosofo);  
+
+        // O filósofo libera os palitos
+        liberar_palitos(monitor, filosofo);  
+
     }
+
+    return NULL;
 }
+
 
 int main() {
-    MonitorFilosofos monitor;
+    // Arrays para armazenar as threads e IDs dos filósofos
+    pthread_t filosofos[NUM_FILOSOFOS];
+    int id[NUM_FILOSOFOS];
+
     int i;
 
-    for (i = 0; i < N; i++) {
-        monitor.estado[i] = 0; // Inicializa os estados dos filósofos
-        sem_init(&monitor.sem[i], 0, 0); // Inicializa os semáforos
+    // Instância do monitor
+    Monitor monitor;
+
+    // Inicialização do mutex do monitor
+    pthread_mutex_init(&monitor.mutex, NULL);
+
+    // Loop para inicialização das condições do monitor
+    for (i = 0; i < NUM_FILOSOFOS; i++) {
+        pthread_cond_init(&monitor.condicao[i], NULL);
     }
 
-    monitor.deadlockFlag = 0;
-    monitor.starvationFlag = 0;
+    // Inicialização de flags
+    deadlock_flag = 0;
+    starvation_flag = 0;
+    monitor.encerrar = 0;
 
-    for (i = 0; i < N; i++) {
-        // Cria um processo separado para cada filósofo
-        pid_t pid = fork();
+    // Configuração do tratamento do sinal SIGINT
+    signal(SIGINT, encerrar_programa);
 
-        if (pid < 0) {
-            // Ocorreu um erro
-            perror("Falha na criação do processo");
-            exit(1);
-        } else if (pid == 0) {
-            // O processo filho representa um filósofo
-            filosofo(&monitor, i);
-            exit(0);
-        }
+    // Inicialização dos atributos das threads
+    pthread_attr_t thread_attr;
+    pthread_attr_init(&thread_attr);
+
+    // Definição da prioridade desejada para as threads (ajustar conforme necessário)
+    struct sched_param param;
+    param.sched_priority = 1;
+
+    // Atribuição do monitor global
+    global_monitor = monitor;
+
+    for (i = 0; i < NUM_FILOSOFOS; i++) {
+        id[i] = i;
+        // Definição dos atributos de thread (prioridade)
+        pthread_attr_setschedparam(&thread_attr, &param);
+        // Criação das threads dos filósofos
+        pthread_create(&filosofos[i], &thread_attr, filosofo, (void *)&id[i]);
     }
 
-    // Aguarda todos os processos filhos terminarem
-    for (i = 0; i < N; i++) {
-        wait(NULL);
+    for (i = 0; i < NUM_FILOSOFOS; i++){
+        // Aguarda o término de todas as threads dos filósofos
+        pthread_join(filosofos[i], NULL);
     }
 
-    for (i = 0; i < N; i++) {
-        sem_destroy(&monitor.sem[i]); // Destroi os semáforos
+    // Destruir o mutex do monitor
+    pthread_mutex_destroy(&monitor.mutex);
+
+    // Destruir as condições do monitor
+    for (i = 0; i < NUM_FILOSOFOS; i++){
+        pthread_cond_destroy(&monitor.condicao[i]);
     }
+
+    // Destruir os atributos das threads
+    pthread_attr_destroy(&thread_attr);
 
     return 0;
 }
