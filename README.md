@@ -26,15 +26,15 @@ A função `main` é responsável por inicializar o monitor, criar um processo s
 
 Para compilar o código, execute o seguinte comando no terminal:
 
-'''
+```
 gcc -o filosofos filosofos.c -lpthread
-'''
+```
 
 Em seguida, execute o programa com o comando:
 
-'''
+```
 ./filosofos
-'''
+```
 
 ## Observações
 
