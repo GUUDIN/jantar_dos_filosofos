@@ -4,7 +4,11 @@ Este projeto implementa uma solução para o problema clássico do Jantar dos Fi
 
 ## Funcionamento do Código
 
-O código simula um grupo de filósofos sentados ao redor de uma mesa circular. Cada filósofo alterna entre pensar e comer. Para evitar deadlocks, os filósofos devem adquirir dois palitos (representados pelo array `estado`) para comer. O monitor garante que apenas um filósofo pode pegar os palitos por vez.
+O código simula um grupo de filósofos sentados ao redor de uma mesa circular. Cada filósofo alterna entre pensar e comer. 
+
+Para evitar deadlock, o código implementa a estratégia de evitar que todos os filósofos fiquem famintos ao mesmo tempo. A função `testar()` é responsável por verificar se um filósofo pode pegar os palitos (recursos) para comer. Ela verifica se o filósofo está faminto e se seus vizinhos da esquerda e da direita não estão comendo. Se todas as condições forem atendidas, o filósofo pode começar a comer. Caso contrário, o filósofo continua faminto e aguarda uma sinalização de que pode tentar novamente.
+
+Por outro lado, a estratégia principal para evitar starvation é a detecção do tempo que um filósofo passa faminto. Quando um filósofo está faminto, o código verifica se ele ficou faminto por um número de ciclos de tempo (definido pela constante CICLOS_STARVATION) maior do que o permitido. Se isso acontecer, é definida a flag starvation_flag, indicando que ocorreu uma situação de starvation.
 
 ### Funções Principais
 
@@ -33,12 +37,10 @@ A função `main` é responsável por inicializar o monitor, criar um processo s
 
 ## Resultados
 
-A solução proposta evita deadlocks e starvation. O programa monitora continuamente o estado dos filósofos e encerra a execução caso detecte um deadlock ou starvation.
-Problemas Encontrados
-O principal desafio foi implementar o monitor de forma a evitar deadlocks e starvation. Para isso, foi necessário garantir que um filósofo só pudesse comer se seus vizinhos não estivessem comendo. Além disso, foi adicionado um mecanismo para detectar starvation, encerrando o programa caso um filósofo fique faminto por um número específico de ciclos.
+A solução proposta evita deadlocks e starvation. O programa monitora continuamente o estado dos filósofos e informa ao usuário se houve algum destes dois problemas. Após diversos testes sob minha análise, não houve nenhuma situação em que os filósofos se encontraram nestes estados.
 
 ## Problemas Encontrados
-O principal desafio foi implementar o monitor de forma a evitar deadlocks e starvation. Para isso, foi necessário garantir que um filósofo só pudesse comer se seus vizinhos não estivessem comendo. Além disso, foi adicionado um mecanismo para detectar starvation, encerrando o programa caso um filósofo fique faminto por um número específico de ciclos.
+O principal desafio foi utilizar a biblioteca Pthreads de maneira correta e implementar o monitor de forma a evitar deadlocks e starvation. Para isso, foi necessário garantir que um filósofo só pudesse comer se seus vizinhos não estivessem comendo. Além disso, foi adicionado um mecanismo para detectar starvation, encerrando o programa caso um filósofo fique faminto por um número específico de ciclos.
 
 ## Compilação e Execução
 
