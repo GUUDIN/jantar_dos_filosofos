@@ -22,10 +22,10 @@ O código simula um grupo de filósofos sentados ao redor de uma mesa circular. 
 
 Cada filósofo é representado por uma thread e segue o seguinte ciclo:
 
-#1 - Pensar por um tempo aleatório.
-#2 - Tentar pegar os palitos.
-#3 - Comer por um tempo aleatório.
-#4 - Liberar os palitos.
+1. Pensar por um tempo aleatório.
+2. Tentar pegar os palitos.
+3. Comer por um tempo aleatório.
+4. Liberar os palitos.
 
 A struct `Monitor` é responsável por verificar se um filósofo faminto pode comer, levando em consideração o estado de seus vizinhos. Se ambos os vizinhos não estiverem comendo, o filósofo faminto pode começar a comer.
 
