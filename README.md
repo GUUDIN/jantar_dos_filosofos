@@ -1,6 +1,6 @@
-# Problema dos Filósofos Jantando
+# Problema do Jantar dos Filósofos
 
-Este código em C implementa o problema dos filósofos jantando usando o monitor como mecanismo de sincronização. O problema dos filósofos jantando é um problema clássico de sincronização que demonstra alocação de recursos e prevenção de deadlocks.
+Este código em C implementa o problema do jantar dos filósofos usando um monitor como mecanismo de sincronização. O Jantar dos filosofos é um problema clássico de sincronização que demonstra alocação de recursos e prevenção de deadlocks.
 
 ## Funcionamento do Código
 
@@ -12,7 +12,7 @@ O código simula um grupo de filósofos sentados ao redor de uma mesa circular. 
 
 - `comer`: Simula o filósofo comendo, exibindo uma mensagem na tela e dormindo por um período de tempo aleatório.
 
-- `pegarPalitos`: Representa o filósofo tentando pegar os palitos. Atualiza o estado do filósofo e aguarda até que os filósofos adjacentes não estejam comendo para evitar deadlock.
+- `pegarPalitos`: Representa o filósofo tentando pegar os palitos. Atualiza o estado do filósofo e, para evitar deadlock, aguarda até que os filósofos adjacentes não estejam comendo.
 
 - `liberarPalitos`: Libera os palitos após o filósofo terminar de comer. Atualiza o estado do filósofo e sinaliza os filósofos adjacentes, se estiverem esperando pelos palitos.
 
@@ -26,12 +26,15 @@ A função `main` é responsável por inicializar o monitor, criar um processo s
 
 Para compilar o código, execute o seguinte comando no terminal:
 
+'''
 gcc -o filosofos filosofos.c -lpthread
-
+'''
 
 Em seguida, execute o programa com o comando:
 
+'''
 ./filosofos
+'''
 
 ## Observações
 
